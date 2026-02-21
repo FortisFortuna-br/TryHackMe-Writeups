@@ -1,0 +1,37 @@
+UltraTech Write-Up
+ip 10.48.151.8
+-------------------------------------------------------
+1. Service Discovery
+We start by identifying open ports and running services using rustscan:
+
+Port 21 (FTP): vsftpd 3.0.3
+
+Port 22 (SSH): OpenSSH 7.6p1 (Ubuntu)
+
+Port 8081 (HTTP): Node.js (Express) - This is our primary target (API)
+
+Port 31331 (HTTP): Apache 2.4.29 - Hosting the frontend
+
+2. Reconnaissance
+Visiting http://10.48.151.8:31331 shows a standard website. I ran a dirsearch on this, which led to /robots.txt. Inside, an interesting entry points to /map.txt. Checking that reveals a login page at /partners.html. This is where things start getting juicy.
+
+3. API & Command Injection
+While poking around the login page, you'll notice the frontend talks to an API on port 8081. Specifically, a "ping" functionality:
+http://10.48.151.8:8081/ping?host=10.48.151.8
+
+I tested for Command Injection by appending a subshell:
+http://10.48.151.8:8081/ping?host=$(ls)
+Boom! It worked. It returned a file list, including a database named utech.db.sqlite.
+
+4. Cracking the Credentials
+I read the database content using the injection, found a bcrypt hash for user r00t, and saved it to hash.txt. Then I fired up John the Ripper:
+john --wordlist=/usr/share/wordlists/rockyou.txt hash.txt
+After a short wait, John cracked it. Now I had the SSH password.
+
+5. Privilege Escalation (The Docker Way)
+I logged in via SSH: ssh r00t@10.48.151.8. Running id showed that the user is part of the docker group.
+This is a golden ticket. I used a classic one-liner to mount the host filesystem into a container:
+docker run -v /:/mnt -it alpine chroot /mnt sh
+
+By doing this, I'm "breaking out" to view the host's drive with root privileges. I navigated to /root and grabbed the root.txt flag. Mission accomplished!
+MR.Fortisfortuna (ChatGPT couldn't handle it)
