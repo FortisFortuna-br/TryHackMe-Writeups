@@ -1,0 +1,48 @@
+Ghostcat: Machine Write-up
+ip 10.49.156.241
+This machine presents us a challenge related to the latest Tomcat vulnerability.You will understand
+ We used the:
+CVE 2020-1938
+1. Reconnaissance (Nmap Scan)
+We start by scanning our target IP 10.49.156.241 to identify open services.
+
+nmap -sV -sC -Pn 10.49.156.241
+Open Ports:
+
+22/tcp: SSH
+
+53/tcp: Domain (DNS)
+
+8009/tcp: AJP13 (The Vulnerable Entry Point)
+
+8080/tcp: Apache Tomcat (HTTP)
+
+2. Exploitation: Reading the Secret
+The AJP service on 10.49.156.241:8009 is misconfigured. We use a Ghostcat exploit script to look inside the web application's protected folders.
+
+The Execution:
+Run a Python exploit against the target:
+python3 ghostcat_exploit.py 10.49.156.241
+
+The Loot:
+By reading /WEB-INF/web.xml, we find credentials hidden in the code. These credentials allow us to log in via SSH (Port 22).
+
+3. Lateral Movement: Cracking the PGP Key
+After logging into 10.49.156.241 via SSH, we find tryhackme.asc and credential.pgp.
+
+Extract Hash: Use gpg2john tryhackme.asc > hash.txt.
+
+Crack Passphrase: Run john --wordlist=/usr/share/wordlists/rockyou.txt hash.txt.
+
+Decrypt: Use the cracked passphrase to import the key and decrypt credential.pgp, giving us the password for the next user.
+
+4. Privilege Escalation: Root via Zip
+Now that we have stepped up to the main user, we check our sudo privileges:
+sudo -l
+
+We see that we can run /usr/bin/zip as root. We can abuse this to escape into a root shell.
+
+The Final Command:
+
+sudo zip /tmp/secret.zip /etc/hosts -T --unzip-command="sh -c /bin/sh"
+You are now root on 10.49.156.241! Grab the flag in /root/root.txt.
